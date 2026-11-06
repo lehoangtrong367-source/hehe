@@ -1,0 +1,453 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local mt = getrawmetatable(game)
+if mt and setreadonly and newcclosure then
+	setreadonly(mt, false)
+	local old_index = mt.__index
+	mt.__index = newcclosure(function(t, k)
+		if t:IsA("Humanoid") then
+			if k == "WalkSpeed" and _G.IsToggled then
+				return _G.defaultWalkSpeed
+			elseif (k == "JumpPower" or k == "JumpHeight") and _G.JumpToggled then
+				return k == "JumpPower" and _G.defaultJumpPower or _G.defaultJumpHeight
+			end
+		end
+		return old_index(t, k)
+	end)
+	setreadonly(mt, true)
+end
+
+_G.CurrentSpeed = 50
+_G.CurrentJump = 100 
+_G.CurrentFlySpeed = 50 
+_G.MIN_SPEED = 16
+_G.MAX_SPEED = 500
+
+_G.IsToggled = false
+_G.JumpToggled = false
+_G.NoclipToggled = false
+_G.InvisibilityToggled = false
+_G.FlyToggled = false 
+
+_G.defaultWalkSpeed = 16
+_G.defaultJumpPower = 50
+_G.defaultJumpHeight = 7.2
+_G.flyVelocity = nil
+_G.flyAttachment = nil
+_G.flyGyro = nil
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SpeedModGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local MainButton = Instance.new("TextButton")
+MainButton.Name = "MainButton"
+MainButton.Size = UDim2.new(0, 58, 0, 38)
+MainButton.Position = UDim2.new(0.1, 0, 0.4, 0)
+MainButton.BackgroundColor3 = Color3.fromRGB(239, 68, 68)
+MainButton.BorderSizePixel = 0
+MainButton.Text = "★"
+MainButton.TextColor3 = Color3.fromRGB(251, 191, 36)
+MainButton.TextSize = 16
+MainButton.ZIndex = 5
+local UICornerMain = Instance.new("UICorner")
+UICornerMain.CornerRadius = UDim.new(0, 4)
+UICornerMain.Parent = MainButton
+MainButton.Parent = ScreenGui
+
+local MenuPanel = Instance.new("Frame")
+MenuPanel.Name = "MenuPanel"
+MenuPanel.Size = UDim2.new(0, 220, 0, 285) 
+MenuPanel.Position = UDim2.new(0.1, 70, 0.4, 0) 
+MenuPanel.BackgroundColor3 = Color3.fromRGB(153, 27, 27)
+MenuPanel.BorderSizePixel = 0
+MenuPanel.Visible = false
+local UICornerPanel = Instance.new("UICorner")
+UICornerPanel.CornerRadius = UDim.new(0, 8)
+UICornerPanel.Parent = MenuPanel
+MenuPanel.Parent = ScreenGui
+
+local MenuUIStroke = Instance.new("UIStroke")
+MenuUIStroke.Color = Color3.fromRGB(251, 191, 36)
+MenuUIStroke.Thickness = 2
+MenuUIStroke.Parent = MenuPanel
+
+local function createToggleButton(name, text, pos, defaultColor)
+	local btn = Instance.new("TextButton")
+	btn.Name = name
+	btn.Size = UDim2.new(0, 95, 0, 32)
+	btn.Position = pos
+	btn.BackgroundColor3 = defaultColor
+	btn.BorderSizePixel = 0
+	btn.Text = text
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.SourceSansBold
+	btn.TextSize = 13
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = btn
+	btn.Parent = MenuPanel
+	return btn
+end
+
+local FlyLabel = Instance.new("TextLabel")
+FlyLabel.Size = UDim2.new(0, 100, 0, 20)
+FlyLabel.Position = UDim2.new(0, 10, 0, 10)
+FlyLabel.BackgroundTransparency = 1
+FlyLabel.Text = "Tốc độ Bay:"
+FlyLabel.TextColor3 = Color3.fromRGB(251, 191, 36)
+FlyLabel.Font = Enum.Font.SourceSansBold
+FlyLabel.TextSize = 14
+FlyLabel.TextXAlignment = Enum.TextXAlignment.Left
+FlyLabel.Parent = MenuPanel
+
+local FlyBtn = createToggleButton("FlyToggle", "BAY: OFF", UDim2.new(0, 10, 0, 30), Color3.fromRGB(220, 38, 38))
+local FlyInput = Instance.new("TextBox")
+FlyInput.Name = "FlyInput"
+FlyInput.Size = UDim2.new(0, 95, 0, 32)
+FlyInput.Position = UDim2.new(0, 115, 0, 30)
+FlyInput.BackgroundColor3 = Color3.fromRGB(69, 10, 10)
+FlyInput.BorderSizePixel = 0
+FlyInput.Text = "50"
+FlyInput.TextColor3 = Color3.fromRGB(251, 191, 36)
+FlyInput.Font = Enum.Font.SourceSansBold
+FlyInput.TextSize = 14
+FlyInput.ClearTextOnFocus = false
+local UICornerFlyInput = Instance.new("UICorner")
+UICornerFlyInput.CornerRadius = UDim.new(0, 6)
+UICornerFlyInput.Parent = FlyInput
+FlyInput.Parent = MenuPanel
+
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Size = UDim2.new(0, 100, 0, 20)
+SpeedLabel.Position = UDim2.new(0, 10, 0, 75)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Text = "Tốc độ đi bộ:"
+SpeedLabel.TextColor3 = Color3.fromRGB(251, 191, 36)
+SpeedLabel.Font = Enum.Font.SourceSansBold
+SpeedLabel.TextSize = 14
+SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpeedLabel.Parent = MenuPanel
+
+local ToggleButton = createToggleButton("SpeedToggle", "TỐC ĐỘ: OFF", UDim2.new(0, 10, 0, 95), Color3.fromRGB(220, 38, 38))
+local SpeedInput = Instance.new("TextBox")
+SpeedInput.Name = "SpeedInput"
+SpeedInput.Size = UDim2.new(0, 95, 0, 32)
+SpeedInput.Position = UDim2.new(0, 115, 0, 95)
+SpeedInput.BackgroundColor3 = Color3.fromRGB(69, 10, 10)
+SpeedInput.BorderSizePixel = 0
+SpeedInput.Text = "50"
+SpeedInput.TextColor3 = Color3.fromRGB(251, 191, 36)
+SpeedInput.Font = Enum.Font.SourceSansBold
+SpeedInput.TextSize = 14
+SpeedInput.ClearTextOnFocus = false
+local UICornerInput = Instance.new("UICorner")
+UICornerInput.CornerRadius = UDim.new(0, 6)
+UICornerInput.Parent = SpeedInput
+SpeedInput.Parent = MenuPanel
+
+local JumpLabel = Instance.new("TextLabel")
+JumpLabel.Size = UDim2.new(0, 100, 0, 20)
+JumpLabel.Position = UDim2.new(0, 10, 0, 140)
+JumpLabel.BackgroundTransparency = 1
+JumpLabel.Text = "Lực nhảy:"
+JumpLabel.TextColor3 = Color3.fromRGB(251, 191, 36)
+JumpLabel.Font = Enum.Font.SourceSansBold
+JumpLabel.TextSize = 14
+JumpLabel.TextXAlignment = Enum.TextXAlignment.Left
+JumpLabel.Parent = MenuPanel
+
+local JumpBtn = createToggleButton("JumpToggle", "NHẢY: OFF", UDim2.new(0, 10, 0, 160), Color3.fromRGB(220, 38, 38))
+local JumpInput = Instance.new("TextBox")
+JumpInput.Name = "JumpInput"
+JumpInput.Size = UDim2.new(0, 95, 0, 32)
+JumpInput.Position = UDim2.new(0, 115, 0, 160)
+JumpInput.BackgroundColor3 = Color3.fromRGB(69, 10, 10)
+JumpInput.BorderSizePixel = 0
+JumpInput.Text = "100"
+JumpInput.TextColor3 = Color3.fromRGB(251, 191, 36)
+JumpInput.Font = Enum.Font.SourceSansBold
+JumpInput.TextSize = 14
+JumpInput.ClearTextOnFocus = false
+local UICornerJumpInput = Instance.new("UICorner")
+UICornerJumpInput.CornerRadius = UDim.new(0, 6)
+UICornerJumpInput.Parent = JumpInput
+JumpInput.Parent = MenuPanel
+
+local NoclipLabel = Instance.new("TextLabel")
+NoclipLabel.Size = UDim2.new(0, 200, 0, 20)
+NoclipLabel.Position = UDim2.new(0, 10, 0, 215)
+NoclipLabel.BackgroundTransparency = 1
+NoclipLabel.Text = "Tính năng bổ sung:"
+NoclipLabel.TextColor3 = Color3.fromRGB(251, 191, 36)
+NoclipLabel.Font = Enum.Font.SourceSansBold
+NoclipLabel.TextSize = 14
+NoclipLabel.TextXAlignment = Enum.TextXAlignment.Left
+NoclipLabel.Parent = MenuPanel
+
+local NoclipBtn = createToggleButton("NoclipToggle", "X.TƯỜNG: OFF", UDim2.new(0, 10, 0, 235), Color3.fromRGB(220, 38, 38))
+local InvisibleBtn = createToggleButton("InvisibleToggle", "T.HÌNH: OFF", UDim2.new(0, 115, 0, 235), Color3.fromRGB(220, 38, 38))
+
+local dragToggleBtn, dragToggleMenu = false, false
+local dragStartBtn, startPosBtn
+local dragStartMenu, startPosMenu
+local hasMovedBtn = false
+
+UserInputService.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		if dragToggleBtn then
+			local delta = input.Position - dragStartBtn
+			if delta.Magnitude > 5 then hasMovedBtn = true end
+			MainButton.Position = UDim2.new(startPosBtn.X.Scale, startPosBtn.X.Offset + delta.X, startPosBtn.Y.Scale, startPosBtn.Y.Offset + delta.Y)
+		end
+		if dragToggleMenu then
+			local delta = input.Position - dragStartMenu
+			MenuPanel.Position = UDim2.new(startPosMenu.X.Scale, startPosMenu.X.Offset + delta.X, startPosMenu.Y.Scale, startPosMenu.Y.Offset + delta.Y)
+		end
+	end
+end)
+
+MainButton.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragToggleBtn = true
+		dragStartBtn = input.Position
+		startPosBtn = MainButton.Position
+		hasMovedBtn = false
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then dragToggleBtn = false end
+		end)
+	end
+end)
+
+MainButton.MouseButton1Up:Connect(function()
+	if not hasMovedBtn then 
+		MenuPanel.Visible = not MenuPanel.Visible 
+		if MenuPanel.Visible then
+			MenuPanel.Position = UDim2.new(MainButton.Position.X.Scale, MainButton.Position.X.Offset + MainButton.Size.X.Offset + 10, MainButton.Position.Y.Scale, MainButton.Position.Y.Offset)
+		end
+	end
+end)
+
+MenuPanel.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		local target = game:GetService("GuiService"):GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
+		local isTextBox = false
+		for _, obj in pairs(target) do
+			if obj:IsA("TextBox") then isTextBox = true break end
+		end
+		if not isTextBox then
+			dragToggleMenu = true
+			dragStartMenu = input.Position
+			startPosMenu = MenuPanel.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then dragToggleMenu = false end
+			end)
+		end
+	end
+end)
+local function removeFlyForce()
+	if _G.flyVelocity then _G.flyVelocity:Destroy(); _G.flyVelocity = nil end
+	if _G.flyAttachment then _G.flyAttachment:Destroy(); _G.flyAttachment = nil end
+	if _G.flyGyro then _G.flyGyro:Destroy(); _G.flyGyro = nil end
+end
+
+local function getCustomMoveDirection()
+	local camera = workspace.CurrentCamera
+	if not camera then return Vector3.new(0, 0, 0) end
+	local PlayerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
+	local PlayerModule = PlayerScripts and PlayerScripts:FindFirstChild("PlayerModule")
+	local controlModule = PlayerModule and require(PlayerModule):GetControls()
+	local moveDirection = Vector3.new(0, 0, 0)
+	
+	if controlModule then
+		moveDirection = controlModule:GetMoveVector()
+	else
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDirection = moveDirection + Vector3.new(0, 0, -1) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDirection = moveDirection + Vector3.new(0, 0, 1) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDirection = moveDirection + Vector3.new(-1, 0, 0) end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDirection = moveDirection + Vector3.new(1, 0, 0) end
+	end
+	
+	local cameraCFrame = camera.CFrame
+	local finalDirection = (cameraCFrame.RightVector * moveDirection.X) + (cameraCFrame.LookVector * -moveDirection.Z)
+	return finalDirection.Magnitude > 0 and finalDirection.Unit or Vector3.new(0, 0, 0)
+end
+
+FlyInput.FocusLost:Connect(function()
+	local num = tonumber(FlyInput.Text)
+	_G.CurrentFlySpeed = num and math.clamp(num, 0, _G.MAX_SPEED) or _G.CurrentFlySpeed
+	FlyInput.Text = tostring(_G.CurrentFlySpeed)
+end)
+
+SpeedInput.FocusLost:Connect(function()
+	local num = tonumber(SpeedInput.Text)
+	_G.CurrentSpeed = num and math.clamp(num, _G.MIN_SPEED, _G.MAX_SPEED) or _G.CurrentSpeed
+	SpeedInput.Text = tostring(_G.CurrentSpeed)
+end)
+
+JumpInput.FocusLost:Connect(function()
+	local num = tonumber(JumpInput.Text)
+	_G.CurrentJump = num and math.clamp(num, 0, 1000) or _G.CurrentJump
+	JumpInput.Text = tostring(_G.CurrentJump)
+end)
+
+FlyBtn.MouseButton1Click:Connect(function()
+	_G.FlyToggled = not _G.FlyToggled
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	
+	if _G.FlyToggled then
+		FlyBtn.Text = "BAY: ON"
+		FlyBtn.BackgroundColor3 = Color3.fromRGB(251, 191, 36)
+		FlyBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+		if rootPart and not _G.flyVelocity then
+			_G.flyAttachment = Instance.new("Attachment")
+			_G.flyAttachment.Name = "FlyAttachment"
+			_G.flyAttachment.Parent = rootPart
+			_G.flyVelocity = Instance.new("LinearVelocity")
+			_G.flyVelocity.Name = "FlyVelocity"
+			_G.flyVelocity.Attachment0 = _G.flyAttachment
+			_G.flyVelocity.MaxForce = math.huge
+			_G.flyVelocity.VectorVelocity = Vector3.new(0, 0, 0)
+			_G.flyVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+			_G.flyVelocity.Parent = rootPart
+			_G.flyGyro = Instance.new("BodyGyro")
+			_G.flyGyro.Name = "FlyGyro"
+			_G.flyGyro.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+			_G.flyGyro.P = 9000
+			_G.flyGyro.cframe = rootPart.CFrame
+			_G.flyGyro.Parent = rootPart
+		end
+	else
+		FlyBtn.Text = "BAY: OFF"
+		FlyBtn.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
+		FlyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		removeFlyForce()
+		if humanoid then humanoid.PlatformStand = false end
+	end
+end)
+
+ToggleButton.MouseButton1Click:Connect(function()
+	_G.IsToggled = not _G.IsToggled
+	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if _G.IsToggled then
+		ToggleButton.Text = "TỐC ĐỘ: ON"
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(251, 191, 36)
+		ToggleButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+	else
+		ToggleButton.Text = "TỐC ĐỘ: OFF"
+		ToggleButton.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
+		ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+		if humanoid and not _G.FlyToggled then humanoid.WalkSpeed = _G.defaultWalkSpeed end
+	end
+end)
+
+JumpBtn.MouseButton1Click:Connect(function()
+	_G.JumpToggled = not _G.JumpToggled
+	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if _G.JumpToggled then
+		JumpBtn.Text = "NHẢY: ON"
+		JumpBtn.BackgroundColor3 = Color3.fromRGB(251, 191, 36)
+		JumpBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+	else
+		JumpBtn.Text = "NHẢY: OFF"
+		JumpBtn.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
+		JumpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		if humanoid then
+			if humanoid.UseJumpPower then humanoid.JumpPower = _G.defaultJumpPower else humanoid.JumpHeight = _G.defaultJumpHeight end
+		end
+	end
+end)
+
+NoclipBtn.MouseButton1Click:Connect(function()
+	_G.NoclipToggled = not _G.NoclipToggled
+	NoclipBtn.Text = _G.NoclipToggled and "X.TƯỜNG: ON" or "X.TƯỜNG: OFF"
+	NoclipBtn.BackgroundColor3 = _G.NoclipToggled and Color3.fromRGB(251, 191, 36) or Color3.fromRGB(220, 38, 38)
+	NoclipBtn.TextColor3 = _G.NoclipToggled and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(255, 255, 255)
+	if not _G.NoclipToggled then
+		local character = LocalPlayer.Character
+		if character then
+			for _, part in pairs(character:GetDescendants()) do
+				if part:IsA("BasePart") then part.CanCollide = true end
+			end
+		end
+	end
+end)
+
+InvisibleBtn.MouseButton1Click:Connect(function()
+	_G.InvisibilityToggled = not _G.InvisibilityToggled
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if _G.InvisibilityToggled then
+		InvisibleBtn.Text = "T.HÌNH: ON"
+		InvisibleBtn.BackgroundColor3 = Color3.fromRGB(251, 191, 36)
+		InvisibleBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+		if character and humanoid then
+			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+			for _, part in pairs(character:GetDescendants()) do
+				if part:IsA("BasePart") or part:IsA("Decal") then
+					if not part:GetAttribute("OriginalTransparency") then part:SetAttribute("OriginalTransparency", part.Transparency) end
+					part.Transparency = (part.Name == "HumanoidRootPart") and 1 or 0.5
+				end
+			end
+		end
+	else
+		InvisibleBtn.Text = "T.HÌNH: OFF"
+		InvisibleBtn.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
+		InvisibleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		if character and humanoid then
+			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer
+			for _, part in pairs(character:GetDescendants()) do
+				if part:IsA("BasePart") or part:IsA("Decal") then
+					local orig = part:GetAttribute("OriginalTransparency")
+					if orig then 
+						part.Transparency = orig
+						part:SetAttribute("OriginalTransparency", nil) 
+					end
+				end
+			end
+		end
+	end
+end)
+
+LocalPlayer.CharacterRemoving:Connect(function()
+	removeFlyForce()
+end)
+
+RunService.PreSimulation:Connect(function(deltaTime)
+	local character = LocalPlayer.Character
+	if not character then return end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not rootPart then return end
+
+	if _G.NoclipToggled then
+		for _, part in pairs(character:GetDescendants()) do
+			if part:IsA("BasePart") then part.CanCollide = false end
+		end
+	end
+
+	if not _G.FlyToggled then
+		humanoid.WalkSpeed = _G.IsToggled and _G.CurrentSpeed or _G.defaultWalkSpeed
+	end
+
+	if not _G.FlyToggled then
+		if _G.JumpToggled then
+			if humanoid.UseJumpPower then humanoid.JumpPower = _G.CurrentJump else humanoid.JumpHeight = _G.CurrentJump end
+		else
+			if humanoid.UseJumpPower then humanoid.JumpPower = _G.defaultJumpPower else humanoid.JumpHeight = _G.defaultJumpHeight end
+		end
+	end
+
+	if _G.FlyToggled and _G.flyVelocity and _G.flyGyro then
+		if not humanoid.PlatformStand then humanoid.PlatformStand = true end
+		local camera = workspace.CurrentCamera
+		if camera then _G.flyGyro.cframe = camera.CFrame end
+		local flyDir = getCustomMoveDirection()
+		_G.flyVelocity.VectorVelocity = flyDir * _G.CurrentFlySpeed
+	end
+end)
